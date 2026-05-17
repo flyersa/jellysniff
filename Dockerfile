@@ -8,15 +8,27 @@ ARG HTMX_VERSION=2.0.10
 ARG ALPINE_VERSION=3.15.12
 ARG CHARTJS_VERSION=4.5.1
 
+# Automatically populated by buildx (`docker build --platform`), e.g. amd64 /
+# arm64. We need it to pick the matching Tailwind standalone binary — without
+# arch-aware download, arm64 builds (under QEMU) pull an x64 binary and exec 127.
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
-# Tailwind standalone CLI (Linux x64) — no Node runtime needed
-RUN curl -fsSL -o tailwindcss \
-      "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64" \
+# Tailwind standalone CLI — no Node runtime needed.
+# Maps Docker's TARGETARCH naming to Tailwind's release-asset naming.
+RUN case "${TARGETARCH}" in \
+      amd64)  TW_ARCH=x64 ;; \
+      arm64)  TW_ARCH=arm64 ;; \
+      arm/v7) TW_ARCH=armv7 ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    curl -fsSL -o tailwindcss \
+      "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
     && chmod +x tailwindcss
 
 # Third-party JS libs
