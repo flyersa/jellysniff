@@ -1,0 +1,43 @@
+{# Reusable now-playing widget. Caller sets endpoint via x-data attribute. #}
+<div class="panel" x-data='nowPlaying({{ endpoint|tojson }})' x-init="start()">
+  <div class="panel-header flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="live-dot" x-show="(data?.sessions?.length || 0) > 0"></span>
+      <span>Now playing</span>
+      <span class="text-zinc-500" x-show="data?.sessions?.length" x-text="`${(data?.sessions?.length || 0)} ${(data?.sessions?.length || 0) === 1 ? 'session' : 'sessions'}`"></span>
+    </div>
+    <div class="text-xs text-zinc-400 flex items-center gap-3">
+      <span x-show="data?.total_bandwidth_bps > 0">total: <span class="text-accent-bright tabular-nums" x-text="fmtBitrate(data?.total_bandwidth_bps)"></span></span>
+    </div>
+  </div>
+  <div x-show="(data?.sessions?.length || 0) === 0" class="p-4 text-sm text-zinc-500">Nothing playing right now.</div>
+  <div class="divide-y divide-zinc-800">
+    <template x-for="s in data?.sessions || []" :key="s.SessionId">
+      <div class="p-3 flex items-center gap-3">
+        <a :href="`/item/${s.LinkItemId}`" class="shrink-0">
+          <img :src="`/img/${s.LinkItemId}?w=120`" loading="lazy" class="w-10 h-14 object-cover bg-zinc-800" data-img-fallback="hide" alt="">
+        </a>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <a :href="`/item/${s.LinkItemId}`" class="text-sm font-medium text-zinc-100 hover:text-accent-bright truncate" x-text="s.Title"></a>
+          </div>
+          <div class="text-xs text-zinc-500 truncate" x-text="s.Subtitle"></div>
+          <div class="text-[11px] text-zinc-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span x-text="s.UserName"></span>
+            <span>·</span>
+            <span x-text="`${s.Client}${s.DeviceName ? ' / ' + s.DeviceName : ''}`"></span>
+            <span>·</span>
+            <span x-text="s.PlayMethod"></span>
+            <span x-show="s.BitrateBps" class="text-accent tabular-nums" x-text="fmtBitrate(s.BitrateBps)"></span>
+          </div>
+          <div class="mt-2 h-1 bg-zinc-800 relative overflow-hidden">
+            <div class="absolute inset-y-0 left-0 bg-accent" :style="`width:${Math.min(100, (s.Progress || 0) * 100).toFixed(1)}%`"></div>
+          </div>
+          <div class="text-[10px] text-zinc-500 mt-0.5 tabular-nums">
+            <span x-text="fmtTime(s.PositionSeconds)"></span> / <span x-text="fmtTime(s.DurationSeconds)"></span>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-zinc-950 text-zinc-100">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}JellySniff{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <!-- app.js MUST load before alpine.min.js — Alpine 3 inits as soon as its
+       own script finishes executing (not on DOMContentLoaded), so any globals
+       it evaluates inside x-data attributes need to already exist by then.
+       Inline scripts like myDash() worked because they run during parsing
+       BEFORE any deferred script. -->
+  <script src="/static/js/app.js" defer></script>
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/alpine.min.js" defer></script>
+  <script src="/static/js/chart.umd.min.js" defer></script>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+{% if user %}
+<header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-30 backdrop-blur">
+  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center gap-6">
+    <a href="/" class="flex items-center gap-2 font-mono text-sm tracking-wider uppercase text-zinc-200">
+      <span class="w-2 h-2 bg-accent"></span>
+      JellySniff
+    </a>
+    <nav class="flex items-center gap-1 text-sm">
+      {% if user.is_admin %}
+      <a href="/admin/overview" class="px-3 py-1.5 hover:bg-zinc-900 hover:text-white {% if request.url.path == '/admin/overview' %}bg-zinc-900 text-white{% else %}text-zinc-400{% endif %}">Overview</a>
+      <a href="/admin/users"    class="px-3 py-1.5 hover:bg-zinc-900 hover:text-white {% if request.url.path.startswith('/admin/users') %}bg-zinc-900 text-white{% else %}text-zinc-400{% endif %}">Users</a>
+      <span class="mx-2 text-zinc-700">|</span>
+      {% endif %}
+      <a href="/me"             class="px-3 py-1.5 hover:bg-zinc-900 hover:text-white {% if request.url.path == '/me' %}bg-zinc-900 text-white{% else %}text-zinc-400{% endif %}">My Stats</a>
+      <a href="/me/history"     class="px-3 py-1.5 hover:bg-zinc-900 hover:text-white {% if request.url.path == '/me/history' %}bg-zinc-900 text-white{% else %}text-zinc-400{% endif %}">History</a>
+      <a href="/me/suggestions" class="px-3 py-1.5 hover:bg-zinc-900 hover:text-white {% if request.url.path == '/me/suggestions' %}bg-zinc-900 text-white{% else %}text-zinc-400{% endif %}">For You</a>
+    </nav>
+    <div class="ml-auto flex items-center gap-3 text-sm">
+      <span class="text-zinc-500">{{ user.username }}{% if user.is_admin %} <span class="text-accent text-xs">admin</span>{% endif %}</span>
+      <form method="POST" action="/api/auth/logout">
+        <button type="submit" class="text-zinc-500 hover:text-zinc-200 text-xs uppercase tracking-wider">Logout</button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endif %}
+<main class="flex-1 w-full">
+  <div class="max-w-[1400px] mx-auto px-6 py-8">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+<footer class="border-t border-zinc-900 text-xs text-zinc-600 py-3">
+  <div class="max-w-[1400px] mx-auto px-6 font-mono">jellysniff / read-only sqlite reporter</div>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

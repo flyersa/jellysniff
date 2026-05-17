@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}My Stats — JellySniff{% endblock %}
+{% block content %}
+<div x-data="myDash()" x-init="load()">
+  <div class="flex items-end justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight">Hey, {{ user.username }}</h1>
+      <p class="text-zinc-500 text-sm mt-1">Your watch profile, devices, and stats.</p>
+    </div>
+    <select x-model="days" @change="load()"
+            class="bg-zinc-900 border border-zinc-800 text-sm px-2 py-1.5">
+      <option value="7">7 days</option>
+      <option value="30">30 days</option>
+      <option value="90">90 days</option>
+      <option value="365">365 days</option>
+      <option value="3650">all time</option>
+    </select>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Watch time</div><div class="text-2xl font-semibold mt-1" x-text="fmtDur(data?.total_seconds || 0)"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Recent plays</div><div class="text-2xl font-semibold mt-1" x-text="(data?.history?.length || 0).toLocaleString()"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Devices</div><div class="text-2xl font-semibold mt-1" x-text="(data?.devices?.length || 0)"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Favorites</div><div class="text-2xl font-semibold mt-1" x-text="(data?.favorites?.length || 0)"></div></div>
+  </div>
+
+  <div class="panel mb-6" x-show="(data?.popular_now?.length || 0) > 0">
+    <div class="panel-header flex items-center justify-between">
+      <span>Popular now</span>
+      <span class="text-zinc-500 text-xs">Trending across the server · excludes what you've already watched</span>
+    </div>
+    <div class="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+      <template x-for="p in data?.popular_now || []" :key="p.Id">
+        <a :href="`/item/${p.Id}`" class="aspect-[2/3] bg-zinc-900 relative group" :title="`${p.Name} — ${p.Viewers} viewers · ${p.Plays} plays`">
+          <img :src="`/img/${p.Id}?w=300`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+          <div class="absolute top-1 right-1 bg-accent text-black text-[10px] px-1.5 py-0.5 font-mono tabular-nums" x-text="`${p.Viewers}`"></div>
+          <div x-show="p.Trending" class="absolute top-1 left-1 bg-amber-500 text-black text-[9px] px-1.5 py-0.5 font-mono uppercase tracking-wider font-semibold">hot</div>
+          <div class="absolute inset-x-0 bottom-0 bg-black/85 text-[10px] p-2 leading-tight">
+            <div class="font-medium text-zinc-100 truncate" x-text="p.Name"></div>
+            <div class="text-zinc-400 flex justify-between mt-0.5">
+              <span x-text="p.ProductionYear || p.Type || ''"></span>
+              <span x-text="p.CommunityRating ? '★ ' + p.CommunityRating.toFixed(1) : ''"></span>
+            </div>
+          </div>
+        </a>
+      </template>
+    </div>
+  </div>
+
+  <div class="panel mb-6" x-show="(data?.suggestions?.length || 0) > 0">
+    <div class="panel-header flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span>Just for you</span>
+        <span class="text-zinc-500 text-xs hidden sm:inline">Some content you may enjoy based on your viewing habits</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <a href="/me/suggestions" class="px-2 py-1 text-xs uppercase tracking-wider text-accent hover:text-accent-bright mr-2">See all →</a>
+        <button @click="$refs.suggScroll.scrollBy({ left: -360, behavior: 'smooth' })"
+                class="px-2 py-1 hover:bg-zinc-800 text-zinc-300" aria-label="scroll left">‹</button>
+        <button @click="$refs.suggScroll.scrollBy({ left: 360, behavior: 'smooth' })"
+                class="px-2 py-1 hover:bg-zinc-800 text-zinc-300" aria-label="scroll right">›</button>
+      </div>
+    </div>
+    <div class="p-3 overflow-x-auto snap-x snap-mandatory scroll-x-styled" x-ref="suggScroll">
+      <div class="flex gap-3">
+        <template x-for="s in data?.suggestions || []" :key="s.Id">
+          <a :href="`/item/${s.Id}`" class="shrink-0 w-32 sm:w-36 snap-start block">
+            <div class="aspect-[2/3] bg-zinc-900 relative">
+              <img :src="`/img/${s.Id}?w=300`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+              <div class="absolute top-1 right-1 bg-accent text-black text-[10px] px-1.5 py-0.5 font-mono tabular-nums font-semibold" x-text="`${s.MatchPct}%`"></div>
+            </div>
+            <div class="mt-1.5">
+              <div class="text-xs text-zinc-200 truncate" :title="s.Name" x-text="s.Name"></div>
+              <div class="text-[10px] text-zinc-500 mt-0.5 truncate" x-text="(s.Reasons || []).slice(0,2).map(r => r.kind==='peer' ? r.label : r.label).join(' · ')"></div>
+            </div>
+          </a>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4 mb-6">
+    <div class="lg:col-span-2 panel">
+      <div class="panel-header">Watch volume / day</div>
+      <div class="p-4"><div class="chart-box"><canvas id="dailyChart"></canvas></div></div>
+    </div>
+    {% with endpoint = "/api/me/now-playing" %}
+      {% include "_now_playing.html" %}
+    {% endwith %}
+  </div>
+
+  <div class="panel mb-6">
+    <div class="panel-header">Top genres</div>
+    <div class="p-4 grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-2">
+      <template x-for="g in (data?.genres || []).slice(0,10)" :key="g.Genre">
+        <div>
+          <div class="flex justify-between text-xs"><span class="truncate pr-2" x-text="g.Genre"></span><span class="text-zinc-500 tabular-nums" x-text="g.Hits"></span></div>
+          <div class="h-1 bg-zinc-900 mt-1"><div class="h-1 bg-accent" :style="`width:${genrePct(g.Hits)}%`"></div></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4 mb-6">
+    <div class="panel lg:col-span-2">
+      <div class="panel-header">Watch volume / month (18 mo)</div>
+      <div class="p-4"><div class="chart-box"><canvas id="monthlyChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Hour of day</div>
+      <div class="p-4"><div class="chart-box-square"><canvas id="hourChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-4 mb-6">
+    <div class="panel">
+      <div class="panel-header">Series progress</div>
+      <div class="p-3 space-y-2">
+        <template x-for="c in data?.completion || []" :key="c.SeriesId">
+          <div>
+            <div class="flex justify-between text-xs">
+              <a :href="`/item/${c.SeriesId.replace(/-/g,'').toLowerCase()}`" class="cell-truncate-inline hover:text-accent-bright" :title="c.SeriesName" x-text="c.SeriesName"></a>
+              <span class="text-zinc-500 tabular-nums shrink-0 ml-3" x-text="`${c.Watched} / ${c.Total}`"></span>
+            </div>
+            <div class="h-1 bg-zinc-900 mt-1"><div class="h-1 bg-accent" :style="`width:${(c.Watched/c.Total*100).toFixed(1)}%`"></div></div>
+          </div>
+        </template>
+        <div x-show="!(data?.completion?.length)" class="text-zinc-500 text-sm">No series progress yet.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">Your most-watched</div>
+      <table class="w-full text-sm">
+        <colgroup><col><col style="width:80px"><col style="width:65px"><col style="width:80px"></colgroup>
+        <thead><tr class="text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+          <th class="py-2 px-3 text-left">Title</th>
+          <th class="py-2 px-3 text-left">Type</th>
+          <th class="py-2 px-3 text-right">Plays</th>
+          <th class="py-2 px-3 text-right">Watched</th>
+        </tr></thead>
+        <tbody>
+          <template x-for="r in data?.top_items || []" :key="r.ItemId">
+            <tr class="border-b border-zinc-900">
+              <td class="py-2 px-3"><div class="flex items-center gap-2 min-w-0">
+                <a :href="`/item/${r.ItemId}`" class="shrink-0"><img :src="`/img/${r.ItemId}?w=80`" loading="lazy" class="w-8 h-12 object-cover bg-zinc-900" data-img-fallback="hide"></a>
+                <a :href="`/item/${r.ItemId}`" class="cell-truncate-inline hover:text-accent-bright" :title="r.ItemName" x-text="r.ItemName"></a></div></td>
+              <td class="py-2 px-3 text-zinc-400" x-text="r.ItemType"></td>
+              <td class="py-2 px-3 text-right tabular-nums" x-text="r.Plays"></td>
+              <td class="py-2 px-3 text-right tabular-nums text-zinc-300" x-text="fmtDur(r.TotalSeconds)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header flex items-center justify-between">
+      <span>Your favorites</span>
+      <a href="/me/suggestions" class="text-xs uppercase tracking-wider text-accent hover:text-accent-bright">More like these →</a>
+    </div>
+    <div class="p-3 grid grid-cols-4 sm:grid-cols-8 gap-2">
+      <template x-for="f in data?.favorites || []" :key="f.Id">
+        <a :href="`/item/${f.Id.replace(/-/g,'').toLowerCase()}`" class="aspect-[2/3] bg-zinc-900 relative group">
+          <img :src="`/img/${f.Id}?w=200`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+          <div class="absolute inset-x-0 bottom-0 bg-black/85 text-[10px] p-1 leading-tight opacity-0 group-hover:opacity-100">
+            <div class="truncate" x-text="f.Name"></div>
+            <div class="text-zinc-400 truncate" x-text="f.SeriesName || f.Type"></div>
+          </div>
+        </a>
+      </template>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+function myDash() {
+  return {
+    days: 30, data: null,
+    _dailyChart: null, _monthlyChart: null, _hourChart: null,
+    fmtDur(s) { return window.fmtDuration(s || 0); },
+    genrePct(hits) {
+      const max = Math.max(1, ...(this.data?.genres || []).map(g => g.Hits));
+      return Math.round((hits / max) * 100);
+    },
+    async load() {
+      const r = await fetch(`/api/me/summary?days=${this.days}`);
+      if (!r.ok) return;
+      this.data = await r.json();
+      this.$nextTick(() => this.renderCharts());
+    },
+    renderCharts() {
+      const dailyCtx = document.getElementById('dailyChart');
+      if (dailyCtx) {
+        this._dailyChart?.destroy();
+        this._dailyChart = new Chart(dailyCtx, {
+          type: 'bar',
+          data: { labels: this.data.daily.map(r => r.Day), datasets: [{
+            data: this.data.daily.map(r => Math.round((r.TotalSeconds || 0) / 60)),
+            backgroundColor: '#AA5CC3', borderWidth: 0,
+          }]}, options: window.chartOpts({ yLabel: 'min' }),
+        });
+      }
+      const monthlyCtx = document.getElementById('monthlyChart');
+      if (monthlyCtx) {
+        this._monthlyChart?.destroy();
+        this._monthlyChart = new Chart(monthlyCtx, {
+          type: 'bar',
+          data: { labels: this.data.monthly.map(r => r.Month), datasets: [{
+            data: this.data.monthly.map(r => Math.round((r.TotalSeconds || 0) / 60)),
+            backgroundColor: '#AA5CC3', borderWidth: 0,
+          }]}, options: window.chartOpts({ yLabel: 'min' }),
+        });
+      }
+      const hourCtx = document.getElementById('hourChart');
+      if (hourCtx) {
+        const buckets = new Array(24).fill(0);
+        for (const h of (this.data.heatmap || [])) buckets[h.Hour] += (h.TotalSeconds || 0);
+        this._hourChart?.destroy();
+        this._hourChart = new Chart(hourCtx, {
+          type: 'polarArea',
+          data: { labels: buckets.map((_,i)=>String(i).padStart(2,'0')), datasets: [{
+            data: buckets.map(s => Math.round(s/60)),
+            backgroundColor: 'rgba(170,92,195,0.35)', borderColor: '#AA5CC3', borderWidth: 1,
+          }]},
+          options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { display: false }, tooltip: { backgroundColor:'#18181b', titleColor:'#fafafa', bodyColor:'#d4d4d8', borderColor:'#3f3f46', borderWidth:1, callbacks: { label: c => `${c.parsed.r} min` } } },
+            scales: { r: { ticks: { display: false }, grid: { color: 'rgba(63,63,70,0.3)' }, angleLines: { color: 'rgba(63,63,70,0.3)' }, pointLabels: { display: true, color: '#71717a', font: { size: 9, family: 'JetBrains Mono, monospace' } } } },
+          },
+        });
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

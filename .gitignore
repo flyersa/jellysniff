@@ -1,0 +1,39 @@
+# Runtime / generated
+.env
+.venv
+__pycache__/
+*.pyc
+cache/
+
+# Tailwind + JS libs are downloaded by the Dockerfile build stage
+app/static/css/app.css
+app/static/js/htmx.min.js
+app/static/js/alpine.min.js
+app/static/js/chart.umd.min.js
+
+# IDE
+.idea/
+.vscode/
+
+# Local debug + playwright scratch
+node_modules/
+package.json
+package-lock.json
+debug-*.mjs
+playwright-report/
+test-results/
+*.tar
+*.tar.gz
+
+# Local env variants + databases + logs
+.env.*
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

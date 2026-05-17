@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Item — JellySniff{% endblock %}
+{% block content %}
+<div x-data='itemDetail({{ item_id|tojson }})' x-init="load()">
+  <div class="mb-4">
+    <a href="javascript:history.back()" class="text-xs uppercase tracking-wider text-zinc-500 hover:text-zinc-300">← Back</a>
+  </div>
+  <div class="grid lg:grid-cols-[180px_1fr] gap-6 mb-6">
+    <div class="aspect-[2/3] bg-zinc-900 max-w-[180px]">
+      <img :src="`/img/${landingId()}?w=400`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+    </div>
+    <div>
+      <div class="text-xs uppercase tracking-wider text-zinc-500" x-text="(data?.item?.Type || '').replace('MediaBrowser.Controller.Entities.','').replace('TV.','')"></div>
+      <h1 class="text-3xl font-semibold tracking-tight mt-1" x-text="data?.item?.Name || '…'"></h1>
+      <div class="text-zinc-400 text-sm mt-1 flex items-center gap-3">
+        <span x-show="data?.item?.ProductionYear" x-text="data?.item?.ProductionYear"></span>
+        <span x-show="data?.item?.CommunityRating" class="flex items-center gap-1">★ <span x-text="data?.item?.CommunityRating?.toFixed(1)"></span></span>
+        <span x-show="data?.item?.OfficialRating" class="border border-zinc-700 px-1.5 text-xs" x-text="data?.item?.OfficialRating"></span>
+        <span x-show="runtimeMinutes()" x-text="`${runtimeMinutes()} min`"></span>
+      </div>
+      <p class="text-zinc-300 text-sm mt-3 leading-relaxed max-w-3xl" x-text="data?.item?.Overview"></p>
+      <div class="flex flex-wrap gap-2 mt-4 text-xs">
+        <template x-for="g in (data?.item?.Genres || '').split('|').filter(Boolean)" :key="g">
+          <span class="border border-zinc-800 bg-zinc-900 px-2 py-0.5" x-text="g"></span>
+        </template>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+        <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Total plays</div><div class="text-2xl font-semibold mt-1" x-text="totalPlays()"></div></div>
+        <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Watched</div><div class="text-2xl font-semibold mt-1" x-text="fmtDur(totalSec())"></div></div>
+        <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Viewers</div><div class="text-2xl font-semibold mt-1" x-text="(data?.viewers?.length || 0)"></div></div>
+        <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500" x-text="isSeries() ? 'Episodes' : 'Type'"></div><div class="text-2xl font-semibold mt-1" x-text="isSeries() ? (data?.episodes?.length || 0) : ((data?.item?.Type || '').split('.').pop())"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="data?.viewers?.length" class="panel mb-6">
+    <div class="panel-header" x-text="data?.is_admin ? 'Who watched this' : 'You watched this'"></div>
+    <table class="w-full text-sm">
+      <thead><tr class="text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+        <th class="py-2 px-3 text-left">User</th>
+        <th class="py-2 px-3 text-right">Plays</th>
+        <th class="py-2 px-3 text-right">Watched</th>
+        <th class="py-2 px-3 text-left">Last played</th>
+      </tr></thead>
+      <tbody>
+        <template x-for="v in data?.viewers || []" :key="v.UserId">
+          <tr class="border-b border-zinc-900">
+            <td class="py-2 px-3"><template x-if="data?.is_admin"><a :href="`/admin/users/${v.UserId}`" class="text-zinc-200 hover:text-accent-bright" x-text="v.Username"></a></template><template x-if="!data?.is_admin"><span class="text-zinc-200" x-text="v.Username"></span></template></td>
+            <td class="py-2 px-3 text-right tabular-nums" x-text="v.Plays"></td>
+            <td class="py-2 px-3 text-right tabular-nums text-zinc-300" x-text="fmtDur(v.TotalSeconds)"></td>
+            <td class="py-2 px-3 text-zinc-400 font-mono text-xs" :title="v.LastPlayed" x-text="fmtDateRelative(v.LastPlayed)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div x-show="isSeries() && (data?.episodes?.length || 0) > 0" class="panel">
+    <div class="panel-header flex items-center justify-between">
+      <span>Episode play counts</span>
+      <span class="text-xs text-zinc-500" x-text="`${data?.episodes?.length || 0} episodes`"></span>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+        <th class="py-2 px-3 text-left">S/E</th>
+        <th class="py-2 px-3 text-left">Episode</th>
+        <th class="py-2 px-3 text-right">Plays</th>
+        <th class="py-2 px-3 text-right">Viewers</th>
+        <th class="py-2 px-3 text-right">Watched</th>
+        <th class="py-2 px-3 text-left">Last played</th>
+      </tr></thead>
+      <tbody>
+        <template x-for="e in data?.episodes || []" :key="e.Id">
+          <tr class="border-b border-zinc-900 hover:bg-zinc-900/50">
+            <td class="py-2 px-3 text-zinc-500 font-mono text-xs" x-text="`S${String(e.Season ?? '?').padStart(2,'0')}E${String(e.Episode ?? '?').padStart(2,'0')}`"></td>
+            <td class="py-2 px-3 cell-truncate" :title="e.Name" x-text="e.Name"></td>
+            <td class="py-2 px-3 text-right tabular-nums" x-text="e.Plays"></td>
+            <td class="py-2 px-3 text-right tabular-nums" x-text="e.Viewers"></td>
+            <td class="py-2 px-3 text-right tabular-nums text-zinc-300" x-text="fmtDur(e.TotalSeconds)"></td>
+            <td class="py-2 px-3 text-zinc-400 font-mono text-xs" :title="e.LastPlayed" x-text="fmtDateRelative(e.LastPlayed)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+function itemDetail(itemId) {
+  return {
+    itemId, data: null,
+    fmtDur(s) { return window.fmtDuration(s || 0); },
+    fmtDateRelative(s) { return window.fmtDateRelative(s); },
+    runtimeMinutes() {
+      const t = this.data?.item?.RunTimeTicks;
+      if (!t) return '';
+      return Math.round(t / 10000000 / 60);
+    },
+    landingId() { return (this.data?.item?.NormId || this.itemId); },
+    isSeries() { return ((this.data?.item?.Type || '').includes('Series')) || (this.data?.episodes?.length || 0) > 0; },
+    totalPlays() {
+      if (this.data?.episodes?.length) {
+        return this.data.episodes.reduce((a, e) => a + (e.Plays || 0), 0);
+      }
+      return this.data?.viewers?.reduce((a, v) => a + (v.Plays || 0), 0) || 0;
+    },
+    totalSec() {
+      if (this.data?.episodes?.length) {
+        return this.data.episodes.reduce((a, e) => a + (e.TotalSeconds || 0), 0);
+      }
+      return this.data?.viewers?.reduce((a, v) => a + (v.TotalSeconds || 0), 0) || 0;
+    },
+    async load() {
+      const r = await fetch(`/api/item/${this.itemId}`);
+      if (!r.ok) return;
+      this.data = await r.json();
+    },
+  };
+}
+</script>
+{% endblock %}

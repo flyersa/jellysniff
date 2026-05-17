@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}User — JellySniff{% endblock %}
+{% block content %}
+<div x-data='userDetail({{ target_id|tojson }})' x-init="load()">
+  <div class="flex items-end justify-between mb-6">
+    <div>
+      <a href="/admin/users" class="text-xs uppercase tracking-wider text-zinc-500 hover:text-zinc-300">← Users</a>
+      <h1 class="text-2xl font-semibold tracking-tight mt-1" x-text="data?.profile?.Username || '…'"></h1>
+      <p class="text-zinc-500 text-sm mt-1" x-show="data?.profile">
+        <span x-show="data?.profile?.IsAdmin" class="text-accent">admin · </span>
+        Last seen <span :title="fmtDateFull(data?.profile?.LastActivityDate)" x-text="fmtDateRelative(data?.profile?.LastActivityDate)"></span>
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <select x-model="days" @change="load()"
+              class="bg-zinc-900 border border-zinc-800 text-sm px-2 py-1.5">
+        <option value="30">30 days</option>
+        <option value="90">90 days</option>
+        <option value="365">365 days</option>
+        <option value="3650">all time</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Plays</div><div class="text-2xl font-semibold mt-1" x-text="(totalPlays() || 0).toLocaleString()"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Watch time</div><div class="text-2xl font-semibold mt-1" x-text="fmtDur(totalSec())"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Devices</div><div class="text-2xl font-semibold mt-1" x-text="(data?.devices?.length || 0)"></div></div>
+    <div class="stat-card"><div class="text-xs uppercase tracking-wider text-zinc-500">Favorites</div><div class="text-2xl font-semibold mt-1" x-text="(data?.favorites?.length || 0)"></div></div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4 mb-6">
+    <div class="lg:col-span-2 panel">
+      <div class="panel-header">Watch volume / day</div>
+      <div class="p-4"><div class="chart-box"><canvas id="dailyChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Top genres</div>
+      <div class="p-4 space-y-2">
+        <template x-for="g in (data?.genres || []).slice(0,10)" :key="g.Genre">
+          <div>
+            <div class="flex justify-between text-xs"><span x-text="g.Genre"></span><span class="text-zinc-500 tabular-nums" x-text="g.Hits"></span></div>
+            <div class="h-1 bg-zinc-900 mt-1"><div class="h-1 bg-accent" :style="`width:${genrePct(g.Hits)}%`"></div></div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4 mb-6">
+    <div class="panel lg:col-span-2">
+      <div class="panel-header">Watch volume / month (18 mo)</div>
+      <div class="p-4"><div class="chart-box"><canvas id="monthlyChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Hour of day</div>
+      <div class="p-4"><div class="chart-box-square"><canvas id="hourChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-4 mb-6">
+    <div class="panel">
+      <div class="panel-header">Series progress</div>
+      <div class="p-3 space-y-2">
+        <template x-for="c in data?.completion || []" :key="c.SeriesId">
+          <div>
+            <div class="flex justify-between text-xs">
+              <a :href="`/item/${c.SeriesId.replace(/-/g,'').toLowerCase()}`" class="cell-truncate-inline hover:text-accent-bright" :title="c.SeriesName" x-text="c.SeriesName"></a>
+              <span class="text-zinc-500 tabular-nums shrink-0 ml-3" x-text="`${c.Watched} / ${c.Total}`"></span>
+            </div>
+            <div class="h-1 bg-zinc-900 mt-1"><div class="h-1 bg-accent" :style="`width:${(c.Watched/c.Total*100).toFixed(1)}%`"></div></div>
+          </div>
+        </template>
+        <div x-show="!(data?.completion?.length)" class="text-zinc-500 text-sm">No series progress yet.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Closest peers (taste similarity)</div>
+      <div class="p-3 space-y-2">
+        <template x-for="p in data?.peers || []" :key="p.UserId">
+          <div>
+            <div class="flex justify-between text-xs">
+              <a :href="`/admin/users/${p.UserId}`" class="hover:text-accent-bright" x-text="p.Username"></a>
+              <span class="text-zinc-500 tabular-nums" x-text="(p.Similarity*100).toFixed(0) + '%'"></span>
+            </div>
+            <div class="h-1 bg-zinc-900 mt-1"><div class="h-1 bg-accent" :style="`width:${(p.Similarity*100).toFixed(1)}%`"></div></div>
+          </div>
+        </template>
+        <div x-show="!(data?.peers?.length)" class="text-zinc-500 text-sm">Not enough data for peer matching yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-4 mb-6">
+    <div class="panel">
+      <div class="panel-header">Devices used</div>
+      <table class="w-full text-sm">
+        <colgroup><col><col><col style="width:70px"><col style="width:90px"></colgroup>
+        <thead><tr class="text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+          <th class="py-2 px-3 text-left">Client</th>
+          <th class="py-2 px-3 text-left">Device</th>
+          <th class="py-2 px-3 text-right">Plays</th>
+          <th class="py-2 px-3 text-right">Watched</th>
+        </tr></thead>
+        <tbody>
+          <template x-for="d in data?.devices || []" :key="`${d.ClientName}|${d.DeviceName}`">
+            <tr class="border-b border-zinc-900">
+              <td class="py-2 px-3 cell-truncate" :title="d.ClientName" x-text="d.ClientName"></td>
+              <td class="py-2 px-3 text-zinc-400 cell-truncate" :title="d.DeviceName" x-text="d.DeviceName"></td>
+              <td class="py-2 px-3 text-right tabular-nums" x-text="d.Plays"></td>
+              <td class="py-2 px-3 text-right tabular-nums text-zinc-300" x-text="fmtDur(d.TotalSeconds)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">Favorites</div>
+      <div class="p-3 grid grid-cols-4 sm:grid-cols-6 gap-2">
+        <template x-for="f in data?.favorites || []" :key="f.Id">
+          <a :href="`/item/${f.Id.replace(/-/g,'').toLowerCase()}`" class="aspect-[2/3] bg-zinc-900 relative group">
+            <img :src="`/img/${f.Id}?w=200`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+            <div class="absolute inset-x-0 bottom-0 bg-black/85 text-[10px] p-1 leading-tight opacity-0 group-hover:opacity-100">
+              <div class="truncate" x-text="f.Name"></div>
+              <div class="text-zinc-400 truncate" x-text="f.SeriesName || f.Type"></div>
+            </div>
+          </a>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel mb-6">
+    <div class="panel-header flex items-center justify-between">
+      <span>Recommended for this user</span>
+      <span class="text-xs text-zinc-500">Based on what this user watches and what people with similar taste enjoy</span>
+    </div>
+    <div class="p-3 grid grid-cols-3 sm:grid-cols-6 gap-3">
+      <template x-for="s in data?.suggestions || []" :key="s.Id">
+        <a :href="`/item/${s.Id}`" class="block panel hover:border-zinc-700">
+          <div class="relative aspect-[2/3] bg-zinc-900">
+            <img :src="`/img/${s.Id}?w=300`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+            <div class="absolute top-1 right-1 bg-accent text-black text-[10px] px-1.5 py-0.5 font-mono tabular-nums font-semibold" x-text="`${s.MatchPct}%`"></div>
+          </div>
+          <div class="p-2">
+            <div class="text-[11px] text-zinc-200 truncate" :title="s.Name" x-text="s.Name"></div>
+            <div class="text-[10px] text-zinc-500 mt-0.5 truncate" x-text="(s.Reasons || []).slice(0,2).map(r => r.kind==='peer' ? r.label : r.label).join(' · ')"></div>
+          </div>
+        </a>
+      </template>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span>Recent watch history</span>
+        <span class="text-zinc-500 text-xs" x-show="history?.total" x-text="`${(history?.total || 0).toLocaleString()} plays`"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <select x-model="historyPageSize" @change="historyPage=1; loadHistory()"
+                class="bg-zinc-900 border border-zinc-800 text-xs px-2 py-1">
+          <option value="25">25/page</option>
+          <option value="50">50/page</option>
+          <option value="100">100/page</option>
+          <option value="250">250/page</option>
+        </select>
+      </div>
+    </div>
+    <table class="w-full text-sm">
+      <colgroup>
+        <col style="width:120px"><col><col style="width:80px"><col style="width:130px"><col style="width:120px"><col style="width:80px">
+      </colgroup>
+      <thead><tr class="text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+        <th class="py-2 px-3 text-left">When</th>
+        <th class="py-2 px-3 text-left">Title</th>
+        <th class="py-2 px-3 text-left">Type</th>
+        <th class="py-2 px-3 text-left">Client</th>
+        <th class="py-2 px-3 text-left">Device</th>
+        <th class="py-2 px-3 text-right">Duration</th>
+      </tr></thead>
+      <tbody>
+        <template x-for="h in history?.history || []" :key="`${h.DateCreated}|${h.ItemId}`">
+          <tr class="border-b border-zinc-900 hover:bg-zinc-900/50">
+            <td class="py-2 px-3 text-zinc-400 font-mono text-xs" :title="fmtDateFull(h.DateCreated)" x-text="fmtDateRelative(h.DateCreated)"></td>
+            <td class="py-2 px-3"><a :href="`/item/${h.ItemId}`" class="cell-truncate-inline hover:text-accent-bright" :title="h.ItemName" x-text="h.ItemName"></a></td>
+            <td class="py-2 px-3 text-zinc-400" x-text="h.ItemType"></td>
+            <td class="py-2 px-3 text-zinc-400 cell-truncate" :title="h.ClientName" x-text="h.ClientName"></td>
+            <td class="py-2 px-3 text-zinc-400 cell-truncate" :title="h.DeviceName" x-text="h.DeviceName"></td>
+            <td class="py-2 px-3 text-right tabular-nums" x-text="fmtDur(h.PlayDuration)"></td>
+          </tr>
+        </template>
+        <tr x-show="!historyLoading && (history?.history?.length || 0) === 0">
+          <td colspan="6" class="text-center py-8 text-zinc-500">No history in this window.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="px-3 py-2 border-t border-zinc-800 flex items-center justify-between text-xs">
+      <span class="text-zinc-500" x-show="history?.total" x-text="historyRange()"></span>
+      <div class="flex items-center gap-1">
+        <button class="px-2 py-1 hover:bg-zinc-800 disabled:opacity-30" :disabled="historyPage <= 1" @click="gotoHistory(1)">« first</button>
+        <button class="px-2 py-1 hover:bg-zinc-800 disabled:opacity-30" :disabled="historyPage <= 1" @click="gotoHistory(historyPage-1)">‹ prev</button>
+        <span class="px-2 text-zinc-400 tabular-nums" x-text="`page ${historyPage} / ${history?.pages || 1}`"></span>
+        <button class="px-2 py-1 hover:bg-zinc-800 disabled:opacity-30" :disabled="historyPage >= (history?.pages || 1)" @click="gotoHistory(historyPage+1)">next ›</button>
+        <button class="px-2 py-1 hover:bg-zinc-800 disabled:opacity-30" :disabled="historyPage >= (history?.pages || 1)" @click="gotoHistory(history?.pages || 1)">last »</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+function userDetail(targetId) {
+  return {
+    days: 90, data: null, targetId,
+    history: { history: [], total: 0, pages: 1 },
+    historyPage: 1, historyPageSize: 50, historyLoading: false,
+    _dailyChart: null, _monthlyChart: null, _hourChart: null,
+    fmtDur(s) { return window.fmtDuration(s || 0); },
+    fmtDateFull(s) { return window.fmtDateFull(s); },
+    fmtDateRelative(s) { return window.fmtDateRelative(s); },
+    totalPlays() { return this.data?.totals?.Plays || 0; },
+    totalSec() { return this.data?.totals?.TotalSeconds || 0; },
+    genrePct(hits) {
+      const max = Math.max(1, ...(this.data?.genres || []).map(g => g.Hits));
+      return Math.round((hits / max) * 100);
+    },
+    historyRange() {
+      const t = this.history?.total || 0;
+      if (!t) return '';
+      const size = parseInt(this.historyPageSize, 10) || 50;
+      const start = (this.historyPage - 1) * size + 1;
+      const end = Math.min(t, start + (this.history?.history?.length || 0) - 1);
+      return `${start.toLocaleString()}–${end.toLocaleString()} of ${t.toLocaleString()}`;
+    },
+    gotoHistory(p) { this.historyPage = p; this.loadHistory(); },
+    async load() {
+      const r = await fetch(`/api/admin/users/${this.targetId}?days=${this.days}`);
+      if (!r.ok) return;
+      this.data = await r.json();
+      this.historyPage = 1;
+      this.loadHistory();
+      this.$nextTick(() => this.renderCharts());
+    },
+    async loadHistory() {
+      this.historyLoading = true;
+      const r = await fetch(`/api/admin/users/${this.targetId}/history?days=${this.days}&limit=${this.historyPageSize}&page=${this.historyPage}`);
+      if (r.ok) this.history = await r.json();
+      this.historyLoading = false;
+    },
+    renderCharts() {
+      const dailyCtx = document.getElementById('dailyChart');
+      if (dailyCtx) {
+        this._dailyChart?.destroy();
+        this._dailyChart = new Chart(dailyCtx, {
+          type: 'bar',
+          data: {
+            labels: this.data.daily.map(r => r.Day),
+            datasets: [{
+              data: this.data.daily.map(r => Math.round((r.TotalSeconds || 0) / 60)),
+              backgroundColor: '#AA5CC3', borderWidth: 0,
+            }],
+          },
+          options: window.chartOpts({ yLabel: 'min' }),
+        });
+      }
+      const monthlyCtx = document.getElementById('monthlyChart');
+      if (monthlyCtx) {
+        this._monthlyChart?.destroy();
+        this._monthlyChart = new Chart(monthlyCtx, {
+          type: 'bar',
+          data: {
+            labels: this.data.monthly.map(r => r.Month),
+            datasets: [{
+              data: this.data.monthly.map(r => Math.round((r.TotalSeconds || 0) / 60)),
+              backgroundColor: '#AA5CC3', borderWidth: 0,
+            }],
+          },
+          options: window.chartOpts({ yLabel: 'min' }),
+        });
+      }
+      const hourCtx = document.getElementById('hourChart');
+      if (hourCtx) {
+        const buckets = new Array(24).fill(0);
+        for (const h of (this.data.heatmap || [])) buckets[h.Hour] += (h.TotalSeconds || 0);
+        this._hourChart?.destroy();
+        this._hourChart = new Chart(hourCtx, {
+          type: 'polarArea',
+          data: {
+            labels: buckets.map((_, i) => String(i).padStart(2,'0')),
+            datasets: [{
+              data: buckets.map(s => Math.round(s/60)),
+              backgroundColor: 'rgba(170,92,195,0.35)',
+              borderColor: '#AA5CC3', borderWidth: 1,
+            }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { display: false }, tooltip: {
+              backgroundColor:'#18181b', titleColor:'#fafafa', bodyColor:'#d4d4d8', borderColor:'#3f3f46', borderWidth:1,
+              callbacks: { label: c => `${c.parsed.r} min` }
+            } },
+            scales: { r: {
+              ticks: { display: false }, grid: { color: 'rgba(63,63,70,0.3)' }, angleLines: { color: 'rgba(63,63,70,0.3)' },
+              pointLabels: { display: true, color: '#71717a', font: { size: 9, family: 'JetBrains Mono, monospace' } },
+            } },
+          },
+        });
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

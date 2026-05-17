@@ -1,0 +1,29 @@
+services:
+  jellysniff:
+    image: ghcr.io/flyersa/jellysniff:latest
+    # Uncomment to build locally instead of pulling from GHCR:
+    # build: .
+    container_name: jellysniff
+    restart: unless-stopped
+    ports:
+      - "8095:8095"
+    env_file:
+      - .env
+    extra_hosts:
+      # Lets the container reach Jellyfin running on the host loopback.
+      # Pair with JS_JELLYFIN_URL=http://host.docker.internal:8096
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Mount the whole jellyfin data dir read-only. Mounting the whole directory
+      # (rather than individual files) means the container always sees the live
+      # WAL/SHM siblings even when Jellyfin rotates them.
+      - /var/lib/jellyfin/data:/data:ro
+      - jellysniff_cache:/cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8095/healthz',timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  jellysniff_cache:

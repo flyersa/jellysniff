@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}For You — JellySniff{% endblock %}
+{% block content %}
+<div x-data="mySuggestions()" x-init="load()">
+  <div class="mb-6">
+    <h1 class="text-2xl font-semibold tracking-tight">For you</h1>
+    <p class="text-zinc-500 text-sm mt-1">Some content you may enjoy based on your viewing habits.</p>
+  </div>
+
+  <section class="mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm uppercase tracking-wider text-zinc-400">Top picks</h2>
+      <span class="text-xs text-zinc-500" x-text="`${data?.picks?.length || 0} picks`"></span>
+    </div>
+    <div class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+      <template x-for="s in data?.picks || []" :key="s.Id">
+        <a :href="`/item/${s.Id}`" class="block panel hover:border-zinc-700 transition-colors">
+          <div class="relative aspect-[2/3] bg-zinc-900">
+            <img :src="`/img/${s.Id}?w=400`" loading="lazy" class="w-full h-full object-cover" data-img-fallback="fade">
+            <div class="absolute top-2 right-2 bg-accent text-black text-[11px] px-1.5 py-0.5 font-mono tabular-nums font-semibold" x-text="`${s.MatchPct}%`"></div>
+            <div x-show="s.CommunityRating" class="absolute top-2 left-2 bg-black/80 text-zinc-200 text-[11px] px-1.5 py-0.5 font-mono tabular-nums" x-text="s.CommunityRating ? '★ ' + s.CommunityRating.toFixed(1) : ''"></div>
+          </div>
+          <div class="p-3">
+            <div class="text-sm font-medium text-zinc-100 truncate" :title="s.Name" x-text="s.Name"></div>
+            <div class="text-xs text-zinc-500 mt-0.5 flex justify-between">
+              <span x-text="s.ProductionYear || s.Type || ''"></span>
+              <span class="text-accent-bright" x-show="s.MatchPct >= 85">strong match</span>
+            </div>
+            <div class="flex flex-wrap gap-1 mt-2">
+              <template x-for="r in (s.Reasons || []).slice(0, 4)" :key="`${r.kind}|${r.label}`">
+                <span class="text-[10px] px-1.5 py-0.5 border"
+                      :class="reasonClass(r.kind)"
+                      :title="reasonTitle(r)"
+                      x-text="reasonLabel(r)"></span>
+              </template>
+            </div>
+          </div>
+        </a>
+      </template>
+    </div>
+    <p x-show="(data?.picks?.length || 0) === 0 && !loading" class="text-zinc-500 text-sm py-6">Watch a few things first and we'll start suggesting matches.</p>
+  </section>
+
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm uppercase tracking-wider text-zinc-400">Users with similar taste</h2>
+      <span class="text-xs text-zinc-500" x-text="`${data?.peers?.length || 0} peers`"></span>
+    </div>
+    <div class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <template x-for="p in data?.peers || []" :key="p.UserId">
+        <div class="panel p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-zinc-200 font-medium" x-text="p.Username"></span>
+            <span class="text-accent tabular-nums" x-text="(p.Similarity*100).toFixed(0)+'%'"></span>
+          </div>
+          <div class="h-1 bg-zinc-900 mt-2"><div class="h-1 bg-accent" :style="`width:${(p.Similarity*100).toFixed(1)}%`"></div></div>
+        </div>
+      </template>
+    </div>
+    <p x-show="(data?.peers?.length || 0) === 0 && !loading" class="text-zinc-500 text-sm py-6">Not enough shared watching with others yet.</p>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+function mySuggestions() {
+  return {
+    data: null, loading: false,
+    reasonClass(kind) {
+      switch (kind) {
+        case 'genre':       return 'border-accent/60 text-accent-bright bg-accent/10';
+        case 'studio':      return 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10';
+        case 'peer':        return 'border-amber-500/40 text-amber-300 bg-amber-500/10';
+        case 'peer-count':  return 'border-amber-500/40 text-amber-300 bg-amber-500/10';
+        case 'highly-rated':return 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10';
+        default:            return 'border-zinc-700 text-zinc-300 bg-zinc-800/30';
+      }
+    },
+    reasonLabel(r) {
+      if (r.kind === 'peer') return `${r.label} watched`;
+      return r.label;
+    },
+    reasonTitle(r) {
+      const what = {
+        genre: 'Shared genre', studio: 'Same studio',
+        peer: 'Someone with similar taste watched this',
+        'peer-count': 'Other users with similar taste watched this',
+        tag: 'Shared tag', keyword: 'Shared keyword',
+        'highly-rated': 'Top community rating',
+      }[r.kind] || r.kind;
+      return `${what}: ${r.label}`;
+    },
+    async load() {
+      this.loading = true;
+      const r = await fetch('/api/me/suggestions');
+      if (r.ok) this.data = await r.json();
+      this.loading = false;
+    },
+  };
+}
+</script>
+{% endblock %}

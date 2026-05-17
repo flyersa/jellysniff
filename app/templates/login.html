@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sign in — JellySniff{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-12" x-data="{ err: '', loading: false }">
+  <div class="flex flex-col items-center mb-8">
+    <img src="/static/img/jellysniff.png" alt="JellySniff" class="w-40 h-40 object-contain mb-3">
+    <h1 class="font-mono uppercase tracking-[0.35em] text-sm text-zinc-300">JellySniff</h1>
+    <p class="text-[11px] text-zinc-500 mt-1 tracking-wider uppercase">Reading your habits, professionally</p>
+  </div>
+  <form
+    method="POST" action="/api/auth/login"
+    class="border border-zinc-800 bg-zinc-900/40 p-6 space-y-4"
+    @submit="loading = true"
+    x-on:htmx:response-error.window="err = 'Invalid credentials'; loading = false"
+  >
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-zinc-500 mb-1.5">Username</label>
+      <input name="username" type="text" required autofocus autocomplete="username"
+             class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm focus:outline-none focus:border-accent">
+    </div>
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-zinc-500 mb-1.5">Password</label>
+      <input name="password" type="password" required autocomplete="current-password"
+             class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm focus:outline-none focus:border-accent">
+    </div>
+    <button type="submit"
+            class="w-full bg-accent text-black font-mono uppercase tracking-wider text-xs py-2.5 hover:bg-accent-bright disabled:opacity-50"
+            :disabled="loading">
+      <span x-show="!loading">Sign in</span>
+      <span x-show="loading">Authenticating…</span>
+    </button>
+    <p class="text-xs text-zinc-500 leading-relaxed">
+      Use your existing Jellyfin credentials. Authentication is forwarded to the Jellyfin server; this app never stores your password.
+    </p>
+  </form>
+</div>
+{% endblock %}
